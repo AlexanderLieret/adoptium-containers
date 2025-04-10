@@ -40,27 +40,17 @@ if [ -n "$USE_SYSTEM_CA_CERTS" ]; then
     # we'll use a temporary truststore.
     if [ ! -w "$JRE_CACERTS_PATH" ]; then
         # We cannot write to the JVM truststore, so we create a temporary one
-        JRE_CACERTS_PATH_NEW=$(mktemp)
-        echo "Using a temporary truststore at $JRE_CACERTS_PATH_NEW"
-        cp "$JRE_CACERTS_PATH" "$JRE_CACERTS_PATH_NEW"
-        JRE_CACERTS_PATH=$JRE_CACERTS_PATH_NEW
+        JRE_CACERTS_PATH=$(mktemp)
+        echo "Using a temporary truststore at $JRE_CACERTS_PATH"
         # If we use a custom truststore, we need to make sure that the JVM uses it
         export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS} -Djavax.net.ssl.trustStore=${JRE_CACERTS_PATH} -Djavax.net.ssl.trustStorePassword=changeit"
     fi
 
-    tmp_store=$(mktemp)
-
-    # Copy full system CA store to a temporary location
-    trust extract --overwrite --format=java-cacerts --filter=ca-anchors --purpose=server-auth "$tmp_store" > /dev/null
-
-    # Add the system CA certificates to the JVM truststore.
-    keytool -importkeystore -destkeystore "$JRE_CACERTS_PATH" -srckeystore "$tmp_store" -srcstorepass changeit -deststorepass changeit -noprompt > /dev/null
-
-    # Clean up the temporary truststore
-    rm -f "$tmp_store"
+    # Copy full system CA store to the JVM truststore
+    trust extract --overwrite --format=java-cacerts --filter=ca-anchors --purpose=server-auth "$JRE_CACERTS_PATH" > /dev/null
 
     # Import the additional certificate into JVM truststore
-    for i in /certificates/*crt; do
+    for i in /certificates/*.crt; do
         if [ ! -f "$i" ]; then
             continue
         fi
@@ -87,6 +77,9 @@ if [ -n "$USE_SYSTEM_CA_CERTS" ]; then
 
             # Add the certificate to the JVM truststore
             keytool -import -noprompt -alias "$ALIAS" -file "$crt" -keystore "$JRE_CACERTS_PATH" -storepass changeit >/dev/null
+
+            # Clean up the certificate file
+            rm -f "$crt"
         done
     done
 
